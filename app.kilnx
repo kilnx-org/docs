@@ -24,6 +24,7 @@ layout docs
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>{page.title} - Kilnx Docs</title>
+      <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 470 469'><g transform='translate(0,470) scale(0.1,-0.1)' fill='%23e64a19'><path d='M360 2850 l0-1850 111 0 111 0 240 233c132 127 256 245 274 260l34 28 0 530 0 529 1220 0 1220 0 0-522-1-523 273-267 273-267 113-1 112 0 0 1850 0 1850-1990 0-1990 0 0-1850z M1410 1877l0-473-349-347-349-347-356 0-356 0 2-352c2-194 6-352 11-350 4 1 333 2 732 2l725 0 0 288 0 288 116 215c64 117 156 288 205 379l89 164 0 503 0 503-235 0-235 0 0-473z M2120 2243c0-60-1-322-2-583l-2-475-178-374-178-374 0-213 0-214 590 0 590 0 0 214 0 214-111 233c-61 129-139 290-173 359l-61 125-5 595-5 595-232 3-233 2 0-107z M2820 1848l0-502 92-170c51-94 143-265 205-381l113-210 0-287 0-288 735 0 735 0 0 350 0 350-355 0-355 0-350 346-350 347 0 473 0 474-235 0-235 0 0-502z'/></g></svg>">
       {kilnx.js}
       <link rel="preconnect" href="https://fonts.googleapis.com">
       <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -33,7 +34,6 @@ layout docs
           --bg-el: rgb(17,17,19);
           --bg-sub: rgb(24,24,27);
           --border: rgb(39,39,42);
-          --border-h: rgb(63,63,70);
           --text: rgb(250,250,250);
           --text2: rgb(161,161,170);
           --text3: rgb(113,113,122);
@@ -51,14 +51,15 @@ layout docs
         pre { background: var(--bg-el); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; overflow-x: auto; margin: 1.5rem 0; line-height: 1.6; }
         pre code { background: none; padding: 0; font-size: 0.875rem; }
         .wrapper { display: flex; min-height: 100vh; }
-        .sidebar { width: 260px; border-right: 1px solid var(--border); padding: 1.5rem; position: fixed; top: 0; bottom: 0; overflow-y: auto; background: var(--bg); }
-        .sidebar-logo { color: var(--text); font-weight: 700; font-size: 1.1rem; margin-bottom: 0.5rem; display: block; }
-        .sidebar-logo:hover { text-decoration: none; }
+        .sidebar { width: 260px; border-right: 1px solid var(--border); padding: 1.5rem; position: fixed; top: 0; bottom: 0; overflow-y: auto; background: var(--bg); z-index: 10; }
+        .sidebar-brand { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.25rem; }
+        .sidebar-brand:hover { text-decoration: none; }
+        .sidebar-brand svg { width: 24px; height: 24px; }
+        .sidebar-brand span { color: var(--text); font-weight: 700; font-size: 1.1rem; }
         .sidebar-sub { color: var(--text3); font-size: 0.75rem; margin-bottom: 1.5rem; }
         .sidebar-section { color: var(--text3); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; margin: 1.25rem 0 0.5rem; font-weight: 600; }
         .sidebar-link { display: block; color: var(--text2); font-size: 0.875rem; padding: 0.35rem 0.75rem; border-radius: 6px; margin-bottom: 2px; transition: all 0.15s; }
         .sidebar-link:hover { color: var(--text); background: var(--bg-sub); text-decoration: none; }
-        .sidebar-link.active { color: var(--accent-g); background: rgba(230,74,25,0.1); }
         .search-box { width: 100%; padding: 0.5rem 0.75rem; background: var(--bg-sub); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.85rem; font-family: inherit; margin-bottom: 1rem; outline: none; }
         .search-box:focus { border-color: var(--accent); }
         .search-box::placeholder { color: var(--text4); }
@@ -83,6 +84,10 @@ layout docs
         .feedback-btn:hover { border-color: var(--accent); color: var(--text); }
         .feedback-thanks { color: var(--accent); font-size: 0.85rem; }
         .updated { color: var(--text4); font-size: 0.8rem; margin-top: 2rem; }
+        .sidebar-ext { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+        .sidebar-ext a { display: flex; align-items: center; gap: 0.5rem; color: var(--text3); font-size: 0.8rem; padding: 0.3rem 0; transition: color 0.15s; }
+        .sidebar-ext a:hover { color: var(--text); text-decoration: none; }
+        .sidebar-ext svg { width: 14px; height: 14px; }
         @media (max-width: 768px) {
           .sidebar { position: static; width: 100%; border-right: none; border-bottom: 1px solid var(--border); }
           .main { margin-left: 0; padding: 2rem 1.5rem; }
@@ -93,12 +98,41 @@ layout docs
     <body>
       <div class="wrapper">
         <aside class="sidebar">
-          <a href="/docs/getting-started" class="sidebar-logo">Kilnx</a>
+          <a href="/docs/getting-started" class="sidebar-brand">
+            <svg viewBox="0 0 470 469" fill="var(--accent)"><g transform="translate(0,470) scale(0.1,-0.1)"><path d="M360 2850 l0-1850 111 0 111 0 240 233c132 127 256 245 274 260l34 28 0 530 0 529 1220 0 1220 0 0-522-1-523 273-267 273-267 113-1 112 0 0 1850 0 1850-1990 0-1990 0 0-1850z M1410 1877l0-473-349-347-349-347-356 0-356 0 2-352c2-194 6-352 11-350 4 1 333 2 732 2l725 0 0 288 0 288 116 215c64 117 156 288 205 379l89 164 0 503 0 503-235 0-235 0 0-473z M2120 2243c0-60-1-322-2-583l-2-475-178-374-178-374 0-213 0-214 590 0 590 0 0 214 0 214-111 233c-61 129-139 290-173 359l-61 125-5 595-5 595-232 3-233 2 0-107z M2820 1848l0-502 92-170c51-94 143-265 205-381l113-210 0-287 0-288 735 0 735 0 0 350 0 350-355 0-355 0-350 346-350 347 0 473 0 474-235 0-235 0 0-502z"/></g></svg>
+            <span>Kilnx</span>
+          </a>
           <div class="sidebar-sub">Documentation</div>
           <input type="search" name="q" class="search-box" placeholder="Search docs..."
                  hx-get="/docs/search" hx-trigger="keyup changed delay:200ms"
                  hx-target="this_search_results" hx-include="[name='q']">
           <div id="this_search_results" class="search-results"></div>
+          <div class="sidebar-section">Guide</div>
+          <a href="/docs/getting-started" class="sidebar-link">Getting Started</a>
+          <a href="/docs/deploy" class="sidebar-link">Deploy</a>
+          <a href="/docs/principles" class="sidebar-link">Design Principles</a>
+          <div class="sidebar-section">Reference</div>
+          <a href="/docs/models" class="sidebar-link">Models</a>
+          <a href="/docs/pages" class="sidebar-link">Pages, Actions, Fragments</a>
+          <a href="/docs/auth" class="sidebar-link">Auth and Permissions</a>
+          <a href="/docs/realtime" class="sidebar-link">Realtime (SSE, WebSocket)</a>
+          <a href="/docs/api" class="sidebar-link">JSON API</a>
+          <a href="/docs/webhooks" class="sidebar-link">Webhooks, Jobs, Schedules</a>
+          <a href="/docs/testing" class="sidebar-link">Testing and i18n</a>
+          <div class="sidebar-ext">
+            <a href="https://kilnx.dev">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+              Website
+            </a>
+            <a href="https://github.com/kilnx-org/kilnx">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+              GitHub
+            </a>
+            <a href="https://github.com/kilnx-org/kilnx/blob/main/GRAMMAR.md">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              Grammar Reference
+            </a>
+          </div>
         </aside>
         <main class="main">
           {page.content}
@@ -108,6 +142,9 @@ layout docs
     </html>
 
 page /docs layout docs title "Docs"
+  redirect /docs/getting-started
+
+page / layout docs title "Docs"
   redirect /docs/getting-started
 
 page /docs/:slug layout docs title "Docs"
