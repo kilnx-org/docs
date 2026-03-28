@@ -67,7 +67,7 @@ for file in content/*.md; do
     /^---$/ && !started { in_front=1; started=1; next }
     /^---$/ && in_front { in_front=0; next }
     !in_front { print }
-  ' "$file" | cmark --unsafe)
+  ' "$file" | cmark-gfm --unsafe --extension table --extension autolink)
 
   ORDER=$((ORDER + 1))
 
