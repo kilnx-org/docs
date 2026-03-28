@@ -61,13 +61,13 @@ for file in content/*.md; do
   SECTION=$(grep '^section:' "$file" 2>/dev/null | head -1 | sed 's/^section: *//')
   [ -z "$SECTION" ] && SECTION="guide"
 
-  # Read body (skip frontmatter between --- markers)
+  # Read body: strip frontmatter, convert markdown to HTML
   BODY=$(awk '
     BEGIN { in_front=0; started=0 }
     /^---$/ && !started { in_front=1; started=1; next }
     /^---$/ && in_front { in_front=0; next }
     !in_front { print }
-  ' "$file")
+  ' "$file" | cmark --unsafe)
 
   ORDER=$((ORDER + 1))
 
