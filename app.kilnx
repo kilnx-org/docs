@@ -1,0 +1,129 @@
+config
+  database: env DATABASE_URL default "sqlite:///data/docs.db"
+  port: env PORT default 8080
+  secret: env SECRET_KEY default "docs-dev-secret"
+
+model doc
+  slug: text unique
+  title: text required
+  body: text required
+  section: text default "guide"
+  sort_order: int default 0
+  updated_at: timestamp auto
+
+model vote
+  doc_slug: text required
+  helpful: int default 1
+  created_at: timestamp auto
+
+layout docs
+  html
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>{page.title} - Kilnx Docs</title>
+      {kilnx.js}
+      <link rel="preconnect" href="https://fonts.googleapis.com">
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', system-ui, sans-serif; background: #09090b; color: #fafafa; line-height: 1.7; }
+        a { color: #ff6e40; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        code { font-family: 'JetBrains Mono', monospace; background: #18181b; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.85em; }
+        pre { background: #111113; border: 1px solid #27272a; border-radius: 8px; padding: 1.25rem; overflow-x: auto; margin: 1.5rem 0; line-height: 1.6; }
+        pre code { background: none; padding: 0; font-size: 0.875rem; }
+        .wrapper { display: flex; min-height: 100vh; }
+        .sidebar { width: 260px; border-right: 1px solid #27272a; padding: 1.5rem; position: fixed; top: 0; bottom: 0; overflow-y: auto; background: #09090b; }
+        .sidebar-logo { color: #fafafa; font-weight: 700; font-size: 1.1rem; margin-bottom: 0.5rem; display: block; }
+        .sidebar-logo:hover { text-decoration: none; }
+        .sidebar-sub { color: #71717a; font-size: 0.75rem; margin-bottom: 1.5rem; }
+        .sidebar-section { color: #71717a; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; margin: 1.25rem 0 0.5rem; font-weight: 600; }
+        .sidebar-link { display: block; color: #a1a1aa; font-size: 0.875rem; padding: 0.35rem 0.75rem; border-radius: 6px; margin-bottom: 2px; transition: all 0.15s; }
+        .sidebar-link:hover { color: #fafafa; background: #18181b; text-decoration: none; }
+        .sidebar-link.active { color: #ff6e40; background: rgba(230,74,25,0.1); }
+        .search-box { width: 100%; padding: 0.5rem 0.75rem; background: #18181b; border: 1px solid #27272a; border-radius: 6px; color: #fafafa; font-size: 0.85rem; font-family: inherit; margin-bottom: 1rem; outline: none; }
+        .search-box:focus { border-color: #e64a19; }
+        .search-box::placeholder { color: #52525b; }
+        .search-results { margin-bottom: 1rem; }
+        .search-result { display: block; padding: 0.5rem 0.75rem; border-radius: 6px; color: #a1a1aa; font-size: 0.85rem; margin-bottom: 2px; }
+        .search-result:hover { background: #18181b; color: #fafafa; text-decoration: none; }
+        .search-result small { color: #52525b; display: block; font-size: 0.75rem; }
+        .main { margin-left: 260px; flex: 1; max-width: 780px; padding: 3rem 4rem; }
+        .doc-body h1 { font-size: 2rem; font-weight: 700; margin-bottom: 1.5rem; letter-spacing: -0.02em; }
+        .doc-body h2 { font-size: 1.4rem; font-weight: 600; margin: 2.5rem 0 1rem; padding-top: 1.5rem; border-top: 1px solid #1e1e21; }
+        .doc-body h3 { font-size: 1.1rem; font-weight: 600; margin: 2rem 0 0.75rem; }
+        .doc-body p { margin-bottom: 1rem; color: #d4d4d8; }
+        .doc-body ul, .doc-body ol { margin: 0.75rem 0 1.25rem 1.5rem; color: #d4d4d8; }
+        .doc-body li { margin-bottom: 0.35rem; }
+        .doc-body table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; font-size: 0.875rem; }
+        .doc-body th { text-align: left; padding: 0.65rem 1rem; border-bottom: 1px solid #27272a; color: #a1a1aa; font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }
+        .doc-body td { padding: 0.65rem 1rem; border-bottom: 1px solid #1e1e21; color: #d4d4d8; }
+        .doc-body blockquote { border-left: 3px solid #e64a19; padding: 0.75rem 1.25rem; margin: 1.5rem 0; background: rgba(230,74,25,0.05); border-radius: 0 6px 6px 0; }
+        .doc-body blockquote p { color: #a1a1aa; margin: 0; }
+        .feedback { margin-top: 4rem; padding-top: 2rem; border-top: 1px solid #27272a; }
+        .feedback-q { color: #71717a; font-size: 0.875rem; margin-bottom: 0.75rem; }
+        .feedback-btn { padding: 0.4rem 1rem; border: 1px solid #27272a; border-radius: 6px; background: #18181b; color: #a1a1aa; font-size: 0.85rem; cursor: pointer; font-family: inherit; margin-right: 0.5rem; transition: all 0.15s; }
+        .feedback-btn:hover { border-color: #e64a19; color: #fafafa; }
+        .feedback-thanks { color: #e64a19; font-size: 0.85rem; }
+        .updated { color: #52525b; font-size: 0.8rem; margin-top: 2rem; }
+        @media (max-width: 768px) {
+          .sidebar { position: static; width: 100%; border-right: none; border-bottom: 1px solid #27272a; }
+          .main { margin-left: 0; padding: 2rem 1.5rem; }
+          .wrapper { flex-direction: column; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="wrapper">
+        <aside class="sidebar">
+          <a href="/docs/getting-started" class="sidebar-logo">Kilnx</a>
+          <div class="sidebar-sub">Documentation</div>
+          <input type="search" name="q" class="search-box" placeholder="Search docs..."
+                 hx-get="/docs/search" hx-trigger="keyup changed delay:200ms"
+                 hx-target="#search-results" hx-include="[name='q']">
+          <div id="search-results" class="search-results"></div>
+          {nav}
+        </aside>
+        <main class="main">
+          {page.content}
+        </main>
+      </div>
+    </body>
+    </html>
+
+# Sidebar navigation (rendered into {nav} by the layout)
+page /docs layout docs title "Docs"
+  redirect /docs/getting-started
+
+page /docs/:slug layout docs title "Docs"
+  query doc: SELECT title, body, updated_at FROM doc WHERE slug = :slug
+  query nav_guide: SELECT slug, title FROM doc WHERE section = 'guide' ORDER BY sort_order
+  query nav_ref: SELECT slug, title FROM doc WHERE section = 'reference' ORDER BY sort_order
+  html
+    <div class="doc-body">
+      {doc.body | raw}
+    </div>
+    <div class="feedback" id="feedback-{slug}">
+      <div class="feedback-q">Was this page helpful?</div>
+      <button class="feedback-btn" hx-post="/docs/{slug}/vote?helpful=1" hx-target="#feedback-{slug}" hx-swap="innerHTML">Yes</button>
+      <button class="feedback-btn" hx-post="/docs/{slug}/vote?helpful=0" hx-target="#feedback-{slug}" hx-swap="innerHTML">No</button>
+    </div>
+    <div class="updated">Last updated: {doc.updated_at | date: "Jan 02, 2006"}</div>
+
+action /docs/:slug/vote method POST
+  query: INSERT INTO vote (doc_slug, helpful) VALUES (:slug, :helpful)
+  html
+    <span class="feedback-thanks">Thanks for the feedback.</span>
+
+fragment /docs/search
+  query results: SELECT slug, title FROM doc
+                 WHERE title LIKE '%' || :q || '%'
+                 OR body LIKE '%' || :q || '%'
+                 LIMIT 8
+  html
+    {{each results}}
+    <a href="/docs/{slug}" class="search-result">{title}</a>
+    {{end}}
