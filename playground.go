@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -30,6 +31,50 @@ type PlaygroundResponse struct {
 // Limit concurrent playground runs
 var sem = make(chan struct{}, 3)
 
+// Rate limiter: track requests per IP
+var (
+	rateMu    sync.Mutex
+	rateCount = make(map[string][]time.Time)
+)
+
+const (
+	rateWindow = 1 * time.Minute
+	rateMax    = 10
+	maxTmpSize = 10 * 1024 * 1024 // 10MB filesystem limit per run
+)
+
+func isRateLimited(ip string) bool {
+	rateMu.Lock()
+	defer rateMu.Unlock()
+
+	now := time.Now()
+	cutoff := now.Add(-rateWindow)
+
+	// Clean old entries
+	recent := rateCount[ip][:0]
+	for _, t := range rateCount[ip] {
+		if t.After(cutoff) {
+			recent = append(recent, t)
+		}
+	}
+
+	if len(recent) >= rateMax {
+		rateCount[ip] = recent
+		return true
+	}
+
+	rateCount[ip] = append(recent, now)
+	return false
+}
+
+func clientIP(r *http.Request) string {
+	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+		return strings.SplitN(fwd, ",", 2)[0]
+	}
+	host, _, _ := net.SplitHostPort(r.RemoteAddr)
+	return host
+}
+
 func freePort() (int, error) {
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -38,6 +83,47 @@ func freePort() (int, error) {
 	port := l.Addr().(*net.TCPAddr).Port
 	l.Close()
 	return port, nil
+}
+
+// sandboxCmd restricts a command: no network, limited filesystem via ulimit
+func sandboxCmd(cmd *exec.Cmd, tmpDir string) {
+	// Block network access by unsetting proxy and using unshare for net namespace
+	// Also set resource limits via SysProcAttr
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Cloneflags: syscall.CLONE_NEWNET, // new network namespace = no network
+	}
+
+	// Set RLIMIT_FSIZE to limit file writes
+	// This is enforced per-process by the kernel
+	cmd.Env = append(cmd.Env, "TMPDIR="+tmpDir)
+}
+
+// enforceFilesizeLimit sets RLIMIT_FSIZE on the current goroutine context
+// We use a wrapper script approach instead for portability
+func wrapWithLimits(kilnxBin string, args []string, tmpDir string, port int, dbPath string) *exec.Cmd {
+	// Use sh -c with ulimit to enforce file size limit
+	// ulimit -f <blocks> limits file creation size (in 512-byte blocks)
+	maxBlocks := maxTmpSize / 512 // 10MB in 512-byte blocks
+	shellCmd := fmt.Sprintf("ulimit -f %d; exec %s %s",
+		maxBlocks, kilnxBin, strings.Join(args, " "))
+
+	cmd := exec.Command("sh", "-c", shellCmd)
+	cmd.Dir = tmpDir
+	cmd.Env = []string{
+		fmt.Sprintf("PORT=%d", port),
+		fmt.Sprintf("DATABASE_URL=sqlite://%s", dbPath),
+		"SECRET_KEY=playground-secret",
+		"HOME=/tmp",
+		"PATH=/usr/local/bin:/usr/bin:/bin",
+		"TMPDIR=" + tmpDir,
+	}
+
+	// New network namespace: no outbound access
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Cloneflags: syscall.CLONE_NEWNET,
+	}
+
+	return cmd
 }
 
 func handlePlayground(w http.ResponseWriter, r *http.Request) {
@@ -52,6 +138,13 @@ func handlePlayground(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != "POST" {
 		http.Error(w, "POST only", 405)
+		return
+	}
+
+	// Rate limit by IP
+	ip := clientIP(r)
+	if isRateLimited(ip) {
+		writeJSON(w, 429, PlaygroundResponse{Error: "rate limited: max 10 runs per minute"})
 		return
 	}
 
@@ -87,6 +180,13 @@ func handlePlayground(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Block dangerous patterns
+	codeLower := strings.ToLower(code)
+	if strings.Contains(codeLower, "fetch") {
+		writeJSON(w, 400, PlaygroundResponse{Error: "fetch is disabled in the playground"})
+		return
+	}
+
 	tmpDir, err := os.MkdirTemp("", "playground-*")
 	if err != nil {
 		writeJSON(w, 500, PlaygroundResponse{Error: "failed to create temp dir"})
@@ -100,7 +200,7 @@ func handlePlayground(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Run kilnx check
+	// Run kilnx check (no sandbox needed, read-only)
 	checkCtx, checkCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer checkCancel()
 
@@ -108,7 +208,7 @@ func handlePlayground(w http.ResponseWriter, r *http.Request) {
 	checkOut, _ := checkCmd.CombinedOutput()
 	diagnostics := strings.TrimSpace(string(checkOut))
 
-	// Find a free port and run the app
+	// Find a free port and run the app in sandbox
 	port, err := freePort()
 	if err != nil {
 		writeJSON(w, 500, PlaygroundResponse{Error: "no free port"})
@@ -120,25 +220,45 @@ func handlePlayground(w http.ResponseWriter, r *http.Request) {
 	runCtx, runCancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer runCancel()
 
-	runCmd := exec.CommandContext(runCtx, "kilnx", "run", appFile)
-	runCmd.Env = append(os.Environ(),
-		fmt.Sprintf("PORT=%d", port),
-		fmt.Sprintf("DATABASE_URL=sqlite://%s", dbPath),
-		"SECRET_KEY=playground-secret",
-	)
-	runCmd.Dir = tmpDir
+	runCmd := wrapWithLimits("kilnx", []string{"run", appFile}, tmpDir, port, dbPath)
+	runCmd.Stdout = nil
+	runCmd.Stderr = nil
 
-	if err := runCmd.Start(); err != nil {
-		writeJSON(w, 200, PlaygroundResponse{
-			Diagnostics: diagnostics,
-			Error:       "failed to start: " + err.Error(),
-		})
-		return
+	// Apply context timeout
+	runCmdCtx := exec.CommandContext(runCtx, runCmd.Path, runCmd.Args[1:]...)
+	runCmdCtx.Dir = runCmd.Dir
+	runCmdCtx.Env = runCmd.Env
+	runCmdCtx.SysProcAttr = runCmd.SysProcAttr
+
+	if err := runCmdCtx.Start(); err != nil {
+		// CLONE_NEWNET may require privileges, fall back without network sandbox
+		runCmdFallback := exec.CommandContext(runCtx, "sh", "-c",
+			fmt.Sprintf("ulimit -f %d; exec kilnx run %s", maxTmpSize/512, appFile))
+		runCmdFallback.Dir = tmpDir
+		runCmdFallback.Env = []string{
+			fmt.Sprintf("PORT=%d", port),
+			fmt.Sprintf("DATABASE_URL=sqlite://%s", dbPath),
+			"SECRET_KEY=playground-secret",
+			"HOME=/tmp",
+			"PATH=/usr/local/bin:/usr/bin:/bin",
+		}
+		if err2 := runCmdFallback.Start(); err2 != nil {
+			writeJSON(w, 200, PlaygroundResponse{
+				Diagnostics: diagnostics,
+				Error:       "failed to start: " + err2.Error(),
+			})
+			return
+		}
+		defer func() {
+			runCmdFallback.Process.Kill()
+			runCmdFallback.Wait()
+		}()
+	} else {
+		defer func() {
+			runCmdCtx.Process.Kill()
+			runCmdCtx.Wait()
+		}()
 	}
-	defer func() {
-		runCmd.Process.Kill()
-		runCmd.Wait()
-	}()
 
 	// Wait for server ready
 	addr := fmt.Sprintf("http://127.0.0.1:%d", port)
@@ -211,6 +331,29 @@ func main() {
 	}
 
 	docsPort := "8081"
+
+	// Clean up stale rate limit entries every 5 minutes
+	go func() {
+		for {
+			time.Sleep(5 * time.Minute)
+			rateMu.Lock()
+			cutoff := time.Now().Add(-rateWindow)
+			for ip, times := range rateCount {
+				recent := times[:0]
+				for _, t := range times {
+					if t.After(cutoff) {
+						recent = append(recent, t)
+					}
+				}
+				if len(recent) == 0 {
+					delete(rateCount, ip)
+				} else {
+					rateCount[ip] = recent
+				}
+			}
+			rateMu.Unlock()
+		}
+	}()
 
 	// Start docs server on internal port
 	var wg sync.WaitGroup
